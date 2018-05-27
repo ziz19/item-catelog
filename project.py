@@ -201,9 +201,17 @@ def showCategories():
     session = DBSession()
     categories = session.query(Category).all()
     if 'user_id' not in login_session:
-        return render_template('publiccategories.html', categories=categories)
+        return render_template(
+            'publiccategories.html',
+            categories=categories,
+            log_in=False
+            )
     else:
-        return render_template('categories.html', categories=categories)
+        return render_template(
+            'categories.html',
+            categories=categories,
+            log_in=True
+            )
 
 
 @app.route('/catalog/new/', methods=['GET', 'POST'])
