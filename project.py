@@ -2,7 +2,8 @@ from flask import Flask, render_template, redirect, url_for
 from flask import request, flash, jsonify
 from flask import session as login_session
 from flask import make_response
-import random, string
+import random
+import string
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from database_setup import Base, Category, CategoryItem, User
@@ -81,8 +82,8 @@ def gconnect():
     stored_access_token = login_session.get('access_token')
     stored_gplus_id = login_session.get('gplus_id')
     if stored_access_token is not None and gplus_id == stored_gplus_id:
-        response = make_response(json.dumps('Current user is already connected.'),
-                                 200)
+        response = make_response(
+            json.dumps('Current user is already connected.'), 200)
         response.headers['Content-Type'] = 'application/json'
         return response
 
@@ -114,7 +115,8 @@ def gconnect():
     output += '!</h1>'
     output += '<img src="'
     output += login_session['picture']
-    output += ' " style = "width: 300px; height: 300px;border-radius: 150px;-webkit-border-radius: 150px;-moz-border-radius: 150px;"> '
+    output += ' " style = "width: 300px; height: 300px;border-radius: 150px;\
+        -webkit-border-radius: 150px;-moz-border-radius: 150px;"> '
     flash("you are now logged in as %s" % login_session['username'])
     print "done!"
     return output
@@ -125,13 +127,15 @@ def gdisconnect():
     access_token = login_session.get('access_token')
     if access_token is None:
         print 'Access Token is None'
-        response = make_response(json.dumps('Current user not connected.'), 401)
+        response = make_response(
+            json.dumps('Current user not connected.'), 401)
         response.headers['Content-Type'] = 'application/json'
         return response
     print 'In gdisconnect access token is %s', access_token
     print 'User name is: '
     print login_session['username']
-    url = 'https://accounts.google.com/o/oauth2/revoke?token=%s' % login_session['access_token']
+    url = 'https://accounts.google.com/o/oauth2/revoke?token=%s' \
+        % login_session['access_token']
     h = httplib2.Http()
     result = h.request(url, 'GET')[0]
     if result['status'] == '200':
@@ -139,7 +143,8 @@ def gdisconnect():
         response.headers['Content-Type'] = 'application/json'
         return response
     else:
-        response = make_response(json.dumps('Failed to revoke token for given user.', 400))
+        response = make_response(
+            json.dumps('Failed to revoke token for given user.', 400))
         response.headers['Content-Type'] = 'application/json'
         return response
 
@@ -161,6 +166,7 @@ def disconnect():
         flash('You were not logged in to begin with!')
         redirect(url_for('showCategories'))
 
+
 # user helper functions
 def createUser(login_session):
     session = DBSession()
@@ -173,10 +179,12 @@ def createUser(login_session):
     user = session.query(User).filter_by(email=login_session['email']).one()
     return user.id
 
+
 def getUserInfo(user_id):
     session = DBSession()
     user = session.query(User).filter_by(id=user_id).one()
     return user
+
 
 def getUserID(email):
     session = DBSession()
@@ -203,7 +211,8 @@ def newCategory():
     session = DBSession()
     if request.method == 'POST':
         print('Login_Session ID:', login_session['user_id'])
-        newCategory = Category(name=request.form['name'], user_id=login_session['user_id'])
+        newCategory = Category(
+            name=request.form['name'], user_id=login_session['user_id'])
         session.add(newCategory)
         session.commit()
         flash('New Category created!')
@@ -257,12 +266,12 @@ def showCategoryItems(category_id):
     print("Creator ID:", category.user_id)
     creator = getUserInfo(category.user_id)
     if 'user_id' not in login_session or \
-        login_session['user_id'] != creator.id:
+            login_session['user_id'] != creator.id:
         return render_template(
             'publiccategoryitems.html',
-            items = items,
-            category = category,
-            creator= creator,
+            items=items,
+            category=category,
+            creator=creator,
             log_in=False)
     else:
         return render_template(
@@ -272,7 +281,6 @@ def showCategoryItems(category_id):
             items=items,
             creator=creator,
             log_in=True)
-
 
 
 @app.route('/catalog/<int:category_id>/item/new/',
@@ -338,6 +346,7 @@ def categoriesJSON():
     session = DBSession()
     categorys = session.query(Category)
     return jsonify(Category=[r.serialize for r in categorys])
+
 
 @app.route('/catalog/<int:category_id>/item/JSON/')
 def categoryItemsJSON(category_id):
