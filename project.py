@@ -1,7 +1,12 @@
-from flask import Flask, render_template, redirect, url_for
-from flask import request, flash, jsonify
-from flask import session as login_session
-from flask import make_response
+from flask import (Flask,
+                   render_template,
+                   redirect,
+                   url_for,
+                   request,
+                   flash,
+                   jsonify,
+                   make_response,
+                   session as login_session)
 import random
 import string
 from sqlalchemy import create_engine
@@ -23,6 +28,7 @@ DBSession = sessionmaker(bind=engine)
 
 @app.route('/login')
 def showLogin():
+    '''log in by third-party oauth'''
     state = ''.join(random.choice(string.ascii_uppercase + string.digits)
                     for x in xrange(32))
     login_session['state'] = state
@@ -32,6 +38,7 @@ def showLogin():
 
 @app.route('/gconnect', methods=['POST'])
 def gconnect():
+    '''log in by google account'''
     # Validate state token
     if request.args.get('state') != login_session['state']:
         response = make_response(json.dumps('Invalid state parameter.'), 401)
@@ -109,6 +116,7 @@ def gconnect():
         user_id = createUser(login_session)
     login_session['user_id'] = user_id
 
+    # format the output
     output = ''
     output += '<h1>Welcome, '
     output += login_session['username']
@@ -124,6 +132,7 @@ def gconnect():
 
 @app.route('/gdisconnect')
 def gdisconnect():
+    '''log out from google account'''
     access_token = login_session.get('access_token')
     if access_token is None:
         print 'Access Token is None'
@@ -151,11 +160,15 @@ def gdisconnect():
 
 @app.route('/disconnect')
 def disconnect():
+    '''log out from third-party oauth'''
+    # check the provider of the third-party oauth
     if 'provider' in login_session:
         if login_session['provider'] == 'google':
             gdisconnect()
             del login_session['gplus_id']
             del login_session['access_token']
+
+    # delete user info
         del login_session['username']
         del login_session['email']
         del login_session['picture']
@@ -198,8 +211,11 @@ def getUserID(email):
 @app.route('/')
 @app.route('/catalog/')
 def showCategories():
+    '''show all categories in the catalog'''
     session = DBSession()
     categories = session.query(Category).all()
+
+    # check if user is logged in
     if 'user_id' not in login_session:
         return render_template(
             'publiccategories.html',
@@ -216,7 +232,14 @@ def showCategories():
 
 @app.route('/catalog/new/', methods=['GET', 'POST'])
 def newCategory():
+    '''add a new category into the catalog'''
+    # check if user is logged in
+    if 'username' not in login_session:
+        return redirect('/login')
+
     session = DBSession()
+
+    # create a new category
     if request.method == 'POST':
         print('Login_Session ID:', login_session['user_id'])
         newCategory = Category(
@@ -231,9 +254,22 @@ def newCategory():
 
 @app.route('/catalog/<int:category_id>/edit/', methods=['GET', 'POST'])
 def editCategory(category_id):
+    '''edit the existing category in the catalog'''
+    # check if user is logged in
+    if 'username' not in login_session:
+        return redirect('/login')
+
     session = DBSession()
     editedCategory = session.query(Category).filter_by(
         id=category_id).one()
+    creator = getUserInfo(editedCategory.user_id)
+
+    # check if current user if the creator
+    if creator.id != login_session['user_id']:
+        flash('You are not authorized to edit others.')
+        return redirect(url_for('showCategories'))
+
+    # edit the existing category
     if request.method == 'POST':
     	if request.form['name']:
             editedCategory.name = request.form['name']
@@ -250,9 +286,22 @@ def editCategory(category_id):
 
 @app.route('/catalog/<int:category_id>/delete/', methods=['GET', 'POST'])
 def deleteCategory(category_id):
+    '''delete a category from the catalog'''
+    # check if user is logged in
+    if 'username' not in login_session:
+        return redirect('/login')
+
     session = DBSession()
     deleteCategory = session.query(Category).filter_by(
         id=category_id).one()
+    creator = getUserInfo(deleteCategory.user_id)
+
+    # check if current user is the creator
+    if creator.id != login_session['user_id']:
+        flash('You are not authorized to delete others.')
+        return redirect(url_for('showCategories'))
+
+    # delete the category
     if request.method == 'POST':
         session.delete(deleteCategory)
         session.commit()
@@ -268,11 +317,14 @@ def deleteCategory(category_id):
 @app.route('/catalog/<int:category_id>/')
 @app.route('/catalog/<int:category_id>/item/')
 def showCategoryItems(category_id):
+    '''show all items in the specific category'''
     session = DBSession()
     category = session.query(Category).filter_by(id=category_id).one()
     items = session.query(CategoryItem).filter_by(category_id=category_id)
     print("Creator ID:", category.user_id)
     creator = getUserInfo(category.user_id)
+
+    # check if user is logged in
     if 'user_id' not in login_session or \
             login_session['user_id'] != creator.id:
         return render_template(
@@ -294,8 +346,21 @@ def showCategoryItems(category_id):
 @app.route('/catalog/<int:category_id>/item/new/',
            methods=['GET', 'POST'])
 def newCategoryItem(category_id):
+    '''add a new item to the category'''
+    # check if user is logged in
+    if 'username' not in login_session:
+        return redirect('/login')
+
     session = DBSession()
     category = session.query(Category).filter_by(id=category_id).one()
+    creator = getUserInfo(category.user_id)
+
+    # check if current user is the creator of the category
+    if creator.id != login_session['user_id']:
+        flash('You are not authorized to add items')
+        return redirect(url_for('showCategoryItems', category_id=category_id))
+
+    # create a new item
     if request.method == 'POST':
         newItem = CategoryItem(
             name=request.form['name'],
@@ -313,8 +378,22 @@ def newCategoryItem(category_id):
 @app.route('/catalog/<int:category_id>/item/<int:item_id>/edit/',
            methods=['GET', 'POST'])
 def editCategoryItem(category_id, item_id):
+    '''edit an existing item in the category'''
+    # check if a user is logged in
+    if 'username' not in login_session:
+        return redirect('/login')
+
     session = DBSession()
     editedItem = session.query(CategoryItem).filter_by(id=item_id).one()
+    category = session.query(Category).filter_by(id=category_id).one()
+    creator = getUserInfo(category.user_id)
+
+    # check if current user is the creator of the category
+    if creator.id != login_session['user_id']:
+        flash('You are not authorized to edit items')
+        return redirect(url_for('showCategoryItems', category_id=category_id))
+
+    # edit an item
     if request.method == 'POST':
         if request.form['name']:
             editedItem.name = request.form['name']
@@ -335,12 +414,26 @@ def editCategoryItem(category_id, item_id):
 @app.route('/catalog/<int:category_id>/item/<int:item_id>/delete/',
            methods=['GET', 'POST'])
 def deleteCategoryItem(category_id, item_id):
+    '''delete a item from the category'''
+    # check if user is logged in
+    if 'username' not in login_session:
+        return redirect('/login')
+
     session = DBSession()
     deleteItem = session.query(CategoryItem).filter_by(id=item_id).one()
+    category = session.query(Category).filter_by(id=category_id).one()
+    creator = getUserInfo(category.user_id)
+
+    # check if current user is the creator of the category
+    if creator.id != login_session['user_id']:
+        flash('You are not authorized to add items')
+        return redirect(url_for('showCategoryItems', category_id=category_id))
+
+    # delete the item
     if request.method == 'POST':
         session.delete(deleteItem)
         session.commit()
-        flash('Menu item deleted!')
+        flash('Cateogry item deleted!')
         return redirect(url_for('showCategoryItems', category_id=category_id))
     else:
         return render_template(
@@ -351,6 +444,7 @@ def deleteCategoryItem(category_id, item_id):
 
 @app.route('/catalog/JSON/')
 def categoriesJSON():
+    '''show JSON file of all categories'''
     session = DBSession()
     categorys = session.query(Category)
     return jsonify(Category=[r.serialize for r in categorys])
@@ -358,6 +452,7 @@ def categoriesJSON():
 
 @app.route('/catalog/<int:category_id>/item/JSON/')
 def categoryItemsJSON(category_id):
+    '''show JSON file of all items in the category'''
     session = DBSession()
     category = session.query(Category).filter_by(id=category_id).one()
     items = session.query(CategoryItem).filter_by(
@@ -367,6 +462,7 @@ def categoryItemsJSON(category_id):
 
 @app.route('/catalog/<int:category_id>/item/<int:item_id>/JSON/')
 def categoryItemJSON(category_id, item_id):
+    '''show JSON file of the item'''
     session = DBSession()
     item = session.query(CategoryItem).filter_by(id=item_id).one()
     return jsonify(CategoryItems=item.serialize)

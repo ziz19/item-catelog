@@ -5,14 +5,10 @@
 		</a>
 	</div>
 	<div class="col-md-6 text-right">
-			<a href="{{url_for('disconnect')}}" id="logout-link">Log out</a>
+			{% if 'username' in session %}
+				<a href="{{url_for('disconnect')}}">Log out</a>
+			{% else %}
+				<a href="{{url_for('showLogin')}}">Log in</a>
+			{% endif %}
 	</div>
 </div>
-
-<script>
-  {% if log_in %}
-		document.getElementById("logout-link").style.visibility="visible";
-	{% else %}
-		document.getElementById("logout-link").style.visibility="hidden";
-  {% endif %}
-</script>
